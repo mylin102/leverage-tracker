@@ -1,0 +1,45 @@
+name: Daily Leverage Update
+
+on:
+  schedule:
+    - cron: '40 0 * * 1-5'   # 08:40 台北時間 (UTC 00:40)，週一至週五
+  workflow_dispatch:           # 手動觸發
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout leverage-tracker
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install yfinance pandas pytz
+
+      - name: Run generate.py
+        run: python generate.py
+
+      - name: Checkout mylin102.github.io
+        uses: actions/checkout@v4
+        with:
+          repository: mylin102/mylin102.github.io
+          token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
+          path: pages-repo
+
+      - name: Copy index.html to leverage/
+        run: |
+          mkdir -p pages-repo/leverage
+          cp index.html pages-repo/leverage/index.html
+
+      - name: Commit and push to mylin102.github.io
+        run: |
+          cd pages-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add leverage/index.html
+          git diff --cached --quiet || git commit -m "leverage: auto update $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
