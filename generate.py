@@ -203,4 +203,44 @@ th{{background:#f9fafb;color:#6b7280;padding:12px;text-align:left;border-bottom:
 """
 
 Path("index.html").write_text(html, encoding="utf-8")
-print(f"done {today_str} us={us_pct:.1f}% tw={tw_pct:.1f}% kr={kr_pct:.1f}%")
+
+# ── 歷史存檔 ──
+# 1. 把今天的頁面另存為 archive/YYYY-MM-DD.html
+archive_dir = Path("archive")
+archive_dir.mkdir(exist_ok=True)
+archive_file = archive_dir / f"{today_str}.html"
+archive_file.write_text(html, encoding="utf-8")
+
+# 2. 重建 archive/index.html：列出所有已存檔日期（最新在上）
+archive_files = sorted(archive_dir.glob("????-??-??.html"), reverse=True)
+
+history_rows = ""
+for f in archive_files:
+    date_str = f.stem  # e.g. 2026-10-27
+    history_rows += f'<li><a href="{f.name}">{date_str}</a></li>\n'
+
+history_html = f"""<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>槓桿追蹤歷史紀錄</title>
+<style>
+body{{font-family:-apple-system,'Noto Sans TC',sans-serif;background:#fff;color:#111;margin:0;padding:24px}}
+.wrap{{max-width:600px;margin:0 auto}} h1{{font-size:22px}} ul{{line-height:2.2em;padding-left:1.2em}}
+a{{color:#2563eb;text-decoration:none}} a:hover{{text-decoration:underline}}
+.back{{display:inline-block;margin-bottom:16px;color:#6b7280;font-size:13px}}
+</style></head><body><div class="wrap">
+<a class="back" href="../">← 回最新頁面</a>
+<h1>📅 歷史紀錄</h1>
+<ul>
+{history_rows}</ul>
+</div></body></html>
+"""
+(archive_dir / "index.html").write_text(history_html, encoding="utf-8")
+
+# 3. 在主頁面加入「歷史紀錄」連結（插入到 </div></body> 前）
+main_with_link = html.replace(
+    "</div></body></html>",
+    '<div style="margin-top:12px;text-align:right"><a href="archive/" style="color:#6b7280;font-size:13px">📅 歷史紀錄</a></div>\n</div></body></html>'
+)
+Path("index.html").write_text(main_with_link, encoding="utf-8")
+
+print(f"done {today_str} us={us_pct:.1f}% tw={tw_pct:.1f}% kr={kr_pct:.1f}% archive={archive_file}")

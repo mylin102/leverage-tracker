@@ -34,14 +34,15 @@ jobs:
 
       - name: Copy index.html to leverage/
         run: |
-          mkdir -p pages-repo/leverage
+          mkdir -p pages-repo/leverage/archive
           cp index.html pages-repo/leverage/index.html
+          cp -r archive/. pages-repo/leverage/archive/
 
       - name: Commit and push to mylin102.github.io
         run: |
           cd pages-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add leverage/index.html
+          git add leverage/index.html leverage/archive/
           git diff --cached --quiet || git commit -m "leverage: auto update $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push
