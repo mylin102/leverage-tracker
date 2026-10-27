@@ -151,7 +151,7 @@ th{{background:#f9fafb;color:#6b7280;padding:12px;text-align:left;border-bottom:
 <table>
 <tr><th>市場</th><th>公式 (成交金額 10日平均)</th><th>數值 / 百分位</th><th>判斷</th></tr>
 <tr><td>🇺🇸 美股</td><td>SOXL / (SOXX+SMH)</td><td>{fmt_ratio(us_cur)}<br><small>1年百分位 {us_pct:.1f}%</small></td><td>{badge(us_pct)}<br><small>SOXL {soxl_c} / SOXX {soxx_c} / SMH {smh_c}</small></td></tr>
-<tr><td>🇹🇼 台股</td><td>(00631L+00670L) / (0050+006208)</td><td>{fmt_ratio(tw_cur)}<br><small>1年百分位 {tw_pct:.1f}%</small></td><td>{badge(tw_pct)}<br><small>加權 {taiex}</small></td></tr>
+<tr><td>🇹🇼 台股</td><td>(00631L+00670L) / (0050+006208)<br><small>分子：元大台灣50正2 + 富邦台灣加權正2<br>分母：元大台灣50 + 富邦台灣加權<br>邏輯：散戶搶買正2槓桿ETF的成交熱度，相對於大盤ETF成交量的比值；比值衝高代表散戶用槓桿追漲到極端</small></td><td>{fmt_ratio(tw_cur)}<br><small>1年百分位 {tw_pct:.1f}%</small></td><td>{badge(tw_pct)}<br><small>加權 {taiex}</small></td></tr>
 <tr><td>🇰🇷 韓股</td><td>(122630.KS + 494310.KS) / (069500.KS + 091160.KS)<br><small>494310=半導體槓桿 122630=大盤槓桿</small></td><td>{fmt_ratio(kr_cur)}<br><small>1年百分位 {kr_pct:.1f}%</small></td><td>{badge(kr_pct)}<br><small>KOSPI {kospi}</small></td></tr>
 <tr><td>🇰🇷 韓股 08:00-08:40 台灣時間</td><td>KOSPI 開盤到08:40波動<br><small>韓國09:00-09:40 = 台灣08:00-08:40</small></td><td colspan="2">{kr_intraday_info}</td></tr>
 </table>
