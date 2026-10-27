@@ -129,6 +129,7 @@ def badge(pct):
     if pct is None: return '<span class="badge yellow">待計算</span>'
     if pct >= 95: return '<span class="badge red">● 亮燈(>95%)</span>'
     if pct >= 80: return '<span class="badge yellow">● 偏熱(>80%)</span>'
+    if pct <= 15: return '<span class="badge blue">● 極冷(&lt;15%)</span>'
     return '<span class="badge green">● 正常</span>'
 
 def fmt_ratio(cur):
@@ -178,7 +179,7 @@ body{{font-family:-apple-system,'Noto Sans TC',sans-serif;background:#fff;color:
 .wrap{{max-width:800px;margin:0 auto}} h1{{font-size:24px;margin:0}} .sub{{color:#6b7280;font-size:13px;margin-top:6px}}
 table{{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;font-size:14px;margin-top:16px;border:1px solid #e5e7eb}}
 th{{background:#f9fafb;color:#6b7280;padding:12px;text-align:left;border-bottom:1px solid #e5e7eb}} td{{padding:12px;border-bottom:1px solid #f3f4f6;vertical-align:top}}
-.badge{{padding:3px 8px;border-radius:12px;font-size:12px;display:inline-block}} .red{{background:#fee2e2;color:#dc2626}} .green{{background:#dcfce7;color:#16a34a}} .yellow{{background:#fef9c3;color:#a16207}}
+.badge{{padding:3px 8px;border-radius:12px;font-size:12px;display:inline-block}} .red{{background:#fee2e2;color:#dc2626}} .green{{background:#dcfce7;color:#16a34a}} .yellow{{background:#fef9c3;color:#a16207}} .blue{{background:#dbeafe;color:#1d4ed8}}
 .card{{background:#f9fafb;border-radius:14px;padding:16px;margin-top:16px;border:1px solid #e5e7eb}} small{{color:#6b7280}}
 </style></head><body><div class="wrap">
 <h1>美台韓槓桿過熱追蹤表 - {today_str} 08:40</h1>
