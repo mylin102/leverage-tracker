@@ -73,6 +73,53 @@ kr_num = ["122630.KS","494310.KS"]
 kr_den = ["069500.KS","091160.KS"]
 kr_cur, kr_pct, kr_ratio, kr_ma = amount_ratio(kr_num, kr_den)
 
+# ── 融資餘額 ──────────────────────────────────────────────
+import urllib.request, json as _json
+
+# 台股：TWSE MI_MARGN API（每日自動抓）
+tw_margin_bil = None   # 億元
+tw_margin_note = ""
+try:
+    _url = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json"
+    _req = urllib.request.Request(_url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(_req, timeout=10) as _r:
+        _d = _json.loads(_r.read())
+    _tables = _d.get("tables", [])
+    if _tables:
+        _rows = _tables[0].get("data", [])
+        # row[2] = 融資金額(仟元)，col[5] = 今日餘額
+        _val_str = _rows[2][5].replace(",", "")
+        tw_margin_thou = int(_val_str)           # 仟元
+        tw_margin_bil = tw_margin_thou / 100000  # 億元
+        tw_margin_note = f"{tw_margin_bil:,.0f}億（歷史天量約 6,533億）"
+except Exception as _e:
+    tw_margin_note = f"抓取失敗：{_e}"
+
+# 韓股：靜態（金融監督院數據，每週更新一次）
+kr_margin_note = "30.15兆韓元(10/23)｜高峰38.63兆(6/24)｜金監院10/27召集10家券商施壓"
+
+# 美股：靜態（FINRA 每月公布）
+us_margin_note = "1.48兆美元(9月)｜高峰1.502兆(6月)｜較一年前1.06兆暴增40%"
+
+# ── 組合判斷訊號 ───────────────────────────────────────────
+def combo_signal(heat_pct, margin_high):
+    """heat_pct: 成交熱度百分位；margin_high: 融資是否偏高"""
+    if heat_pct is None:
+        return ""
+    if heat_pct >= 95 and margin_high:
+        return '<span class="badge red">⚠ 最危險：熱度過高+融資堆積 → 多殺多風險</span>'
+    if heat_pct >= 95:
+        return '<span class="badge red">⚠ 成交過熱</span>'
+    if heat_pct <= 15 and margin_high:
+        return '<span class="badge blue">↗ 短線冷卻+融資未退：偏多但不追高，注意監管壓力</span>'
+    if heat_pct <= 15:
+        return '<span class="badge blue">↗ 極冷：籌碼乾淨，反彈條件成熟</span>'
+    return ""
+
+us_combo  = combo_signal(us_pct, True)
+tw_combo  = combo_signal(tw_pct, tw_margin_bil is not None and tw_margin_bil >= 6000)
+kr_combo  = combo_signal(kr_pct, True)   # 韓股融資仍在歷史高位
+
 # 4) 指數最新
 def last_close(ticker):
     try:
@@ -150,12 +197,14 @@ try:
 - 百分位 >95% = 散戶槓桿追到最瘋 → 過熱警告
 - 百分位 80-95% = 偏熱，注意風險
 - 百分位 <20% = 槓桿極冷、籌碼乾淨 → 反彈條件成熟，不是危險訊號
+- 成交熱度 >95% + 融資餘額高 = 最危險，多殺多
+- 成交熱度 <15% + 融資餘額高 = 短線冷了不會再崩，但上去有監管壓力，偏多但不追高
 - 韓股是台股開盤的領先指標，KOSPI 開盤漲跌方向通常預示台積電開盤走勢
 
 數據：
-- 美股 SOXL/(SOXX+SMH) 成交金額比值 10日MA = {fmt_ratio(us_cur)}，1年百分位 {us_pct:.1f}%
-- 台股 (00631L+00670L)/(0050+006208) 成交金額比值 10日MA = {fmt_ratio(tw_cur)}，1年百分位 {tw_pct:.1f}%
-- 韓股槓桿比值 10日MA = {fmt_ratio(kr_cur)}，1年百分位 {kr_pct:.1f}%
+- 美股 SOXL/(SOXX+SMH) 成交金額比值 10日MA = {fmt_ratio(us_cur)}，1年百分位 {us_pct:.1f}%，融資：{us_margin_note}
+- 台股 (00631L+00670L)/(0050+006208) 成交金額比值 10日MA = {fmt_ratio(tw_cur)}，1年百分位 {tw_pct:.1f}%，融資：{tw_margin_note}
+- 韓股槓桿比值 10日MA = {fmt_ratio(kr_cur)}，1年百分位 {kr_pct:.1f}%，融資：{kr_margin_note}
 - KOSPI 今日開盤波動：{kr_intraday_info}
 - 加權指數前收：{taiex}，KOSPI：{kospi}
 - SOXL 最新收盤：{soxl_c}，SOXX：{soxx_c}，SMH：{smh_c}
@@ -186,11 +235,11 @@ th{{background:#f9fafb;color:#6b7280;padding:12px;text-align:left;border-bottom:
 <div class="sub">自動產生 · 白底版 · 每日 00:40 UTC = 08:40 台北時間 · 來源 Yahoo Finance</div>
 
 <table>
-<tr><th>市場</th><th>公式 (成交金額 10日平均)</th><th>數值 / 百分位</th><th>判斷</th></tr>
-<tr><td>🇺🇸 美股</td><td>SOXL / (SOXX+SMH)</td><td>{fmt_ratio(us_cur)}<br><small>1年百分位 {us_pct:.1f}%</small></td><td>{badge(us_pct)}<br><small>SOXL {soxl_c} / SOXX {soxx_c} / SMH {smh_c}</small></td></tr>
-<tr><td>🇹🇼 台股</td><td>(00631L+00670L) / (0050+006208)<br><small>分子：元大台灣50正2 + 富邦台灣加權正2<br>分母：元大台灣50 + 富邦台灣加權<br>邏輯：散戶搶買正2槓桿ETF的成交熱度，相對於大盤ETF成交量的比值；比值衝高代表散戶用槓桿追漲到極端</small></td><td>{fmt_ratio(tw_cur)}<br><small>1年百分位 {tw_pct:.1f}%</small></td><td>{badge(tw_pct)}<br><small>加權 {taiex}</small></td></tr>
-<tr><td>🇰🇷 韓股</td><td>(122630.KS + 494310.KS) / (069500.KS + 091160.KS)<br><small>494310=半導體槓桿 122630=大盤槓桿</small></td><td>{fmt_ratio(kr_cur)}<br><small>1年百分位 {kr_pct:.1f}%</small></td><td>{badge(kr_pct)}<br><small>KOSPI {kospi}</small></td></tr>
-<tr><td>🇰🇷 韓股 08:00-08:40 台灣時間</td><td>KOSPI 開盤到08:40波動<br><small>韓國09:00-09:40 = 台灣08:00-08:40</small></td><td colspan="2">{kr_intraday_info}</td></tr>
+<tr><th>市場</th><th>公式 (成交金額 10日平均)</th><th>成交熱度 / 百分位</th><th>融資餘額</th><th>判斷</th></tr>
+<tr><td>🇺🇸 美股</td><td>SOXL / (SOXX+SMH)</td><td>{fmt_ratio(us_cur)}<br><small>1年百分位 {us_pct:.1f}%</small></td><td><small>{us_margin_note}</small></td><td>{badge(us_pct)}<br>{us_combo}<br><small>SOXL {soxl_c} / SOXX {soxx_c} / SMH {smh_c}</small></td></tr>
+<tr><td>🇹🇼 台股</td><td>(00631L+00670L) / (0050+006208)<br><small>分子：元大台灣50正2 + 富邦台灣加權正2<br>分母：元大台灣50 + 富邦台灣加權<br>邏輯：散戶搶買正2槓桿ETF的成交熱度，相對於大盤ETF成交量的比值；比值衝高代表散戶用槓桿追漲到極端</small></td><td>{fmt_ratio(tw_cur)}<br><small>1年百分位 {tw_pct:.1f}%</small></td><td><small>{tw_margin_note}</small></td><td>{badge(tw_pct)}<br>{tw_combo}<br><small>加權 {taiex}</small></td></tr>
+<tr><td>🇰🇷 韓股</td><td>(122630.KS + 494310.KS) / (069500.KS + 091160.KS)<br><small>494310=半導體槓桿 122630=大盤槓桿</small><br><small style="color:#1d4ed8">📌 極冷(&lt;15%)代表融資幾乎洗乾淨，是反彈的必要條件。搭配當日開盤強彈才算有說服力的訊號。單獨極冷不代表會漲，還需要殖利率不急升、基本面未惡化。</small></td><td>{fmt_ratio(kr_cur)}<br><small>1年百分位 {kr_pct:.1f}%</small></td><td><small>{kr_margin_note}</small></td><td>{badge(kr_pct)}<br>{kr_combo}<br><small>KOSPI {kospi}</small></td></tr>
+<tr><td>🇰🇷 韓股 08:00-08:40 台灣時間</td><td>KOSPI 開盤到08:40波動<br><small>韓國09:00-09:40 = 台灣08:00-08:40</small></td><td colspan="3">{kr_intraday_info}</td></tr>
 </table>
 
 <div class="card">
