@@ -134,6 +134,33 @@ def badge(pct):
 def fmt_ratio(cur):
     return f"{cur:.4f}" if cur is not None else "—"
 
+# AI 結論
+ai_conclusion = ""
+try:
+    import os
+    from openai import OpenAI
+    _client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    _prompt = f"""你是台灣期貨市場的資深分析師。根據以下數據，用繁體中文寫一段60字以內的今日開盤判斷，語氣簡潔直接，不要廢話，結尾給一個操作方向。
+
+數據：
+- 美股 SOXL/(SOXX+SMH) 成交金額比值 10日MA = {fmt_ratio(us_cur)}，1年百分位 {us_pct:.1f}%
+- 台股 (00631L+00670L)/(0050+006208) 成交金額比值 10日MA = {fmt_ratio(tw_cur)}，1年百分位 {tw_pct:.1f}%
+- 韓股槓桿比值 10日MA = {fmt_ratio(kr_cur)}，1年百分位 {kr_pct:.1f}%
+- KOSPI 今日開盤波動：{kr_intraday_info}
+- 加權指數前收：{taiex}，KOSPI：{kospi}
+- SOXL 最新收盤：{soxl_c}，SOXX：{soxx_c}，SMH：{smh_c}
+- 今日日期：{today_str}"""
+
+    _resp = _client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": _prompt}],
+        max_tokens=200,
+        temperature=0.4,
+    )
+    ai_conclusion = _resp.choices[0].message.content.strip()
+except Exception as _e:
+    ai_conclusion = f"（AI結論產生失敗：{_e}）"
+
 html = f"""
 <!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>美台韓槓桿過熱追蹤 - {today_str}</title>
@@ -157,7 +184,11 @@ th{{background:#f9fafb;color:#6b7280;padding:12px;text-align:left;border-bottom:
 </table>
 
 <div class="card">
-<b>結論：</b> 美股 { '過熱亮燈' if us_pct>=95 else '降溫中'} / 台股 { '過熱' if tw_pct>=95 else '正常'} / 韓股 { '過熱' if kr_pct>=95 else '正常'}<br>
+<b>🤖 今日判斷：</b> {ai_conclusion}
+</div>
+
+<div class="card">
+<b>數值結論：</b> 美股 { '過熱亮燈' if us_pct>=95 else '降溫中'} / 台股 { '過熱' if tw_pct>=95 else '正常'} / 韓股 { '過熱' if kr_pct>=95 else '正常'}<br>
 <small>判斷邏輯：三地都用同一個邏輯，成交金額比值10日平均衝到1年95%以上 = 散戶開槓桿追到最瘋。台股離年高10%內才算有效。韓國08:00-08:40是台股09:00開盤的領先指標，三星、SK海力士在這40分鐘的走向會直接影響台積電開盤。</small>
 </div>
 
