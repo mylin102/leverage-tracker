@@ -134,12 +134,15 @@ def badge(pct):
 def fmt_ratio(cur):
     return f"{cur:.4f}" if cur is not None else "—"
 
-# AI 結論
+# AI 結論（DeepSeek，格式與 OpenAI 相容）
 ai_conclusion = ""
 try:
     import os
     from openai import OpenAI
-    _client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    _client = OpenAI(
+        api_key=os.environ["DEEPSEEK_API_KEY"],
+        base_url="https://api.deepseek.com",
+    )
     _prompt = f"""你是台灣期貨市場的資深分析師。根據以下數據，用繁體中文寫一段60字以內的今日開盤判斷，語氣簡潔直接，不要廢話，結尾給一個操作方向。
 
 數據：
@@ -152,7 +155,7 @@ try:
 - 今日日期：{today_str}"""
 
     _resp = _client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="deepseek-chat",
         messages=[{"role": "user", "content": _prompt}],
         max_tokens=200,
         temperature=0.4,

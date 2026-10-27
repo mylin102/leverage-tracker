@@ -23,7 +23,7 @@ jobs:
       - name: Run generate.py
         run: python generate.py
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
       - name: Checkout mylin102.github.io
         uses: actions/checkout@v4
