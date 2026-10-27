@@ -74,7 +74,11 @@ def last_close(ticker):
     try:
         df = yf.download(ticker, period="5d", interval="1d", progress=False, auto_adjust=False)
         if df.empty: return None
-        return float(df['Close'].iloc[-1])
+        val = df['Close'].iloc[-1]
+        # yfinance 新版單 ticker 也可能回傳 Series
+        if hasattr(val, 'iloc'):
+            val = val.iloc[0]
+        return float(val)
     except:
         return None
 
@@ -96,12 +100,18 @@ try:
         if not today_intra.empty:
             # 韓股 09:00 KST = 08:00 TPE，找最接近的
             # 開盤那根
-            open_price = float(today_intra['Open'].iloc[0])
+            def _scalar(val):
+                """確保從 Series/DataFrame 取出純量"""
+                if hasattr(val, 'iloc'):
+                    val = val.iloc[0]
+                return float(val)
+
+            open_price = _scalar(today_intra['Open'].iloc[0])
             # 08:40 對應 09:40 KST = 08:40 TPE，大約第2根30m
             # 取到 08:40 前的最後一筆
             cutoff = today_intra[today_intra.index.time <= pd.to_datetime("08:40").time()]
             if not cutoff.empty:
-                price_0840 = float(cutoff['Close'].iloc[-1])
+                price_0840 = _scalar(cutoff['Close'].iloc[-1])
                 chg = (price_0840 - open_price) / open_price * 100 if open_price else 0
                 kr_intraday_info = f"開盤 {open_price:.2f} → 08:40 {price_0840:.2f} {chg:+.2f}%"
             else:
