@@ -1,6 +1,7 @@
 
 import yfinance as yf
 import pandas as pd
+import numpy as np
 from datetime import datetime
 import pytz
 from pathlib import Path
@@ -36,14 +37,17 @@ def amount_ratio(ticker_num, ticker_den, period="400d"):
         # sum
         num_amount = amount[ticker_num].sum(axis=1) if len(ticker_num)>1 else amount[ticker_num[0]]
         den_amount = amount[ticker_den].sum(axis=1) if len(ticker_den)>1 else amount[ticker_den[0]]
-        # avoid div0
-        ratio = num_amount / den_amount.replace(0, pd.NA)
+        # 過濾 volume=0 的休市日（yfinance 對台韓股補 0），避免 dtype=object 破壞 rolling
+        valid = (num_amount > 0) & (den_amount > 0)
+        num_amount = num_amount[valid].astype(float)
+        den_amount = den_amount[valid].astype(float)
+        ratio = num_amount / den_amount
         ma10 = ratio.rolling(10).mean()
         # percentile last year (252 days)
-        last_year = ma10.tail(252)
-        if len(last_year.dropna()) < 20:
+        last_year = ma10.dropna().tail(252)
+        if len(last_year) < 20:
             return None, 0, ratio, ma10
-        current = ma10.iloc[-1]
+        current = last_year.iloc[-1]
         if pd.isna(current):
             return None, 0, ratio, ma10
         pct = (last_year <= current).mean() * 100
