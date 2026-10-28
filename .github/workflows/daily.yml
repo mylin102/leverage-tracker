@@ -20,17 +20,24 @@ jobs:
       - name: Install dependencies
         run: pip install yfinance pandas pytz openai
 
-      - name: Run generate.py
-        run: python generate.py
-        env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-
       - name: Checkout mylin102.github.io
         uses: actions/checkout@v4
         with:
           repository: mylin102/mylin102.github.io
           token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
           path: pages-repo
+
+      - name: Restore existing archive into workspace
+        run: |
+          mkdir -p archive
+          if [ -d pages-repo/leverage/archive ]; then
+            cp pages-repo/leverage/archive/*.html archive/ 2>/dev/null || true
+          fi
+
+      - name: Run generate.py
+        run: python generate.py
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
       - name: Copy index.html to leverage/
         run: |
