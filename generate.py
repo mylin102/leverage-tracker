@@ -73,33 +73,21 @@ kr_num = ["122630.KS","494310.KS"]
 kr_den = ["069500.KS","091160.KS"]
 kr_cur, kr_pct, kr_ratio, kr_ma = amount_ratio(kr_num, kr_den)
 
-# ── 融資餘額 ──────────────────────────────────────────────
-import urllib.request, json as _json
+# ── 融資餘額（實時化）──────────────────────────────────────
+from improve_margin_tracking import get_tw_margin_with_history, get_us_margin_proxy_funding_rate, get_kr_margin_daily
 
-# 台股：TWSE MI_MARGN API（每日自動抓）
-tw_margin_bil = None   # 億元
-tw_margin_note = ""
-try:
-    _url = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json"
-    _req = urllib.request.Request(_url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(_req, timeout=10) as _r:
-        _d = _json.loads(_r.read())
-    _tables = _d.get("tables", [])
-    if _tables:
-        _rows = _tables[0].get("data", [])
-        # row[2] = 融資金額(仟元)，col[5] = 今日餘額
-        _val_str = _rows[2][5].replace(",", "")
-        tw_margin_thou = int(_val_str)           # 仟元
-        tw_margin_bil = tw_margin_thou / 100000  # 億元
-        tw_margin_note = f"{tw_margin_bil:,.0f}億（歷史天量約 6,533億）"
-except Exception as _e:
-    tw_margin_note = f"抓取失敗：{_e}"
+# 台灣融資（改進版：金額 + 日差額 + 歷史百分位）
+tw_margin_result = get_tw_margin_with_history(Path("margin_history"))
+tw_margin_bil = tw_margin_result["current"]
+tw_margin_note = tw_margin_result["note"] if tw_margin_result["current"] is not None else "TWSE API 抓取失敗"
 
-# 韓股：靜態（金融監督院數據，每週更新一次）
-kr_margin_note = "30.15兆韓元(10/23)｜高峰38.63兆(6/24)｜金監院10/27召集10家券商施壓"
+# 美股融資（改進版：期貨 funding rate 代理）
+us_margin_result = get_us_margin_proxy_funding_rate()
+us_margin_note = us_margin_result["note"]
 
-# 美股：靜態（FINRA 每月公布）
-us_margin_note = "1.48兆美元(9月)｜高峰1.502兆(6月)｜較一年前1.06兆暴增40%"
+# 韓股融資（改進版：KOSPI200 升貼水代理）
+kr_margin_result = get_kr_margin_daily()
+kr_margin_note = kr_margin_result["note"]
 
 # ── 組合判斷訊號 ───────────────────────────────────────────
 def combo_signal(heat_pct, margin_high):
@@ -116,9 +104,9 @@ def combo_signal(heat_pct, margin_high):
         return '<span class="badge blue">↗ 極冷：籌碼乾淨，反彈條件成熟</span>'
     return ""
 
-us_combo  = combo_signal(us_pct, True)
-tw_combo  = combo_signal(tw_pct, tw_margin_bil is not None and tw_margin_bil >= 6000)
-kr_combo  = combo_signal(kr_pct, True)   # 韓股融資仍在歷史高位
+us_combo  = combo_signal(us_pct, "融資堆積" in us_margin_note)
+tw_combo  = combo_signal(tw_pct, "升溫" in tw_margin_note or (tw_margin_bil is not None and tw_margin_bil >= 6000))
+kr_combo  = combo_signal(kr_pct, "融資堆積" in kr_margin_note)
 
 # 4) 指數最新
 def last_close(ticker):
