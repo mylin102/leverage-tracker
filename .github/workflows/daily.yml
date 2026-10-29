@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install yfinance pandas pytz openai
+        run: pip install -r requirements.txt
 
       - name: Checkout mylin102.github.io
         uses: actions/checkout@v4
