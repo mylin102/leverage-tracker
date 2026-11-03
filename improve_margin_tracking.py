@@ -44,6 +44,11 @@ def get_tw_margin_with_history(archive_dir: Path = Path("margin_history")):
         if history_file.exists():
             history = json.loads(history_file.read_text())
         
+        # 同一天重跑時覆蓋當日紀錄，比較對象改為前一天
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        if history and history[-1]["date"] == today_str:
+            history.pop()
+
         # 3. 與昨日比較
         if history:
             yesterday_margin = history[-1]["margin"]
@@ -59,7 +64,6 @@ def get_tw_margin_with_history(archive_dir: Path = Path("margin_history")):
                 tw_margin_signal = "融資正常"
         
         # 4. 更新歷史檔案 (append-only)
-        today_str = datetime.now().strftime("%Y-%m-%d")
         history.append({"date": today_str, "margin": tw_margin_bil})
         # 只保留最近 252 天（一年交易日）
         history = history[-252:]
@@ -80,7 +84,7 @@ def get_tw_margin_with_history(archive_dir: Path = Path("margin_history")):
             "current": tw_margin_bil,
             "trend": tw_margin_trend,
             "signal": tw_margin_signal,
-            "note": f"{tw_margin_bil:,.0f}億 {tw_margin_trend} {tw_margin_signal}"
+            "note": f"{tw_margin_bil:,.0f}億 {tw_margin_trend or '(尚無前一日資料)'} {tw_margin_signal}".strip()
         }
     
     except Exception as e:

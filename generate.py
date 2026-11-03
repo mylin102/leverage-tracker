@@ -113,19 +113,26 @@ def last_close(ticker):
     try:
         df = yf.download(ticker, period="5d", interval="1d", progress=False, auto_adjust=False)
         if df.empty: return None
-        val = df['Close'].iloc[-1]
-        # yfinance 新版單 ticker 也可能回傳 Series
-        if hasattr(val, 'iloc'):
-            val = val.iloc[0]
-        return float(val)
+        close = df['Close']
+        # yfinance 新版單 ticker 也可能回傳 DataFrame
+        if hasattr(close, 'columns'):
+            close = close.iloc[:, 0]
+        # 開盤前當日列的 Close 是 NaN，取最後一筆有效收盤
+        close = close.dropna()
+        if close.empty:
+            return None
+        return float(close.iloc[-1])
     except:
         return None
 
-taiex = last_close("^TWII")
-kospi = last_close("^KS11")
-soxl_c = last_close("SOXL")
-soxx_c = last_close("SOXX")
-smh_c = last_close("SMH")
+def fmt_price(val):
+    return f"{val:,.2f}" if val is not None else "—"
+
+taiex = fmt_price(last_close("^TWII"))
+kospi = fmt_price(last_close("^KS11"))
+soxl_c = fmt_price(last_close("SOXL"))
+soxx_c = fmt_price(last_close("SOXX"))
+smh_c = fmt_price(last_close("SMH"))
 
 # 5) 韓股 08:00-08:40 台灣時間波動 = 韓國 09:00-09:40
 # 用 30m 數據
@@ -160,12 +167,24 @@ try:
 except Exception as e:
     kr_intraday_info = f"error {e}"
 
+def heat_level(pct):
+    """回傳 (等級文字, 顏色)；徽章與數值結論共用同一套門檻"""
+    if pct is None:
+        return '待計算', 'yellow'
+    if pct >= 95:
+        return '過熱亮燈', 'red'
+    if pct >= 80:
+        return '偏熱', 'yellow'
+    if pct <= 15:
+        return '極冷', 'blue'
+    return '正常', 'green'
+
 def badge(pct):
-    if pct is None: return '<span class="badge yellow">待計算</span>'
-    if pct >= 95: return '<span class="badge red">● 亮燈(>95%)</span>'
-    if pct >= 80: return '<span class="badge yellow">● 偏熱(>80%)</span>'
-    if pct <= 15: return '<span class="badge blue">● 極冷(&lt;15%)</span>'
-    return '<span class="badge green">● 正常</span>'
+    label, color = heat_level(pct)
+    if pct is None:
+        return f'<span class="badge {color}">{label}</span>'
+    suffix = {'red': '(>95%)', 'yellow': '(>80%)', 'blue': '(&lt;15%)'}.get(color, '')
+    return f'<span class="badge {color}">● {label}{suffix}</span>'
 
 def fmt_ratio(cur):
     return f"{cur:.4f}" if cur is not None else "—"
@@ -235,7 +254,7 @@ th{{background:#f9fafb;color:#6b7280;padding:12px;text-align:left;border-bottom:
 </div>
 
 <div class="card">
-<b>數值結論：</b> 美股 { '過熱亮燈' if us_pct>=95 else '降溫中'} / 台股 { '過熱' if tw_pct>=95 else '正常'} / 韓股 { '過熱' if kr_pct>=95 else '正常'}<br>
+<b>數值結論：</b> 美股 {heat_level(us_pct)[0]} / 台股 {heat_level(tw_pct)[0]} / 韓股 {heat_level(kr_pct)[0]}<br>
 <small>判斷邏輯：三地都用同一個邏輯，成交金額比值10日平均衝到1年95%以上 = 散戶開槓桿追到最瘋。台股離年高10%內才算有效。韓國08:00-08:40是台股09:00開盤的領先指標，三星、SK海力士在這40分鐘的走向會直接影響台積電開盤。</small><br><br>
 <small>📊 <b>百分位怎麼看：</b>「1年百分位 X%」代表過去一年有 X% 的交易日，槓桿熱度比今天低（或等於）。例如 49% = 中性；>95% = 過去一年最熱的前5%，亮燈警告；&lt;20% = 接近一年低點，籌碼乾淨，反彈條件成熟。</small>
 </div>

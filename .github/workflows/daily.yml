@@ -33,6 +33,8 @@ jobs:
           if [ -d pages-repo/leverage/archive ]; then
             cp pages-repo/leverage/archive/*.html archive/ 2>/dev/null || true
           fi
+          mkdir -p margin_history
+          cp pages-repo/leverage/margin_history.json margin_history/ 2>/dev/null || true
 
       - name: Run generate.py
         run: python generate.py
@@ -44,12 +46,13 @@ jobs:
           mkdir -p pages-repo/leverage/archive
           cp index.html pages-repo/leverage/index.html
           cp -r archive/. pages-repo/leverage/archive/
+          cp margin_history/margin_history.json pages-repo/leverage/ 2>/dev/null || true
 
       - name: Commit and push to mylin102.github.io
         run: |
           cd pages-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add leverage/index.html leverage/archive/
+          git add leverage/index.html leverage/archive/ leverage/margin_history.json 2>/dev/null || git add leverage/index.html leverage/archive/
           git diff --cached --quiet || git commit -m "leverage: auto update $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push
