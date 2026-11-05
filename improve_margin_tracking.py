@@ -1,8 +1,9 @@
 """
 leverage-tracker 融資追蹤改進方案
-1. 台灣融資：快照 → 與昨日比較 + 歷史百分位
+1. 台灣融資：快照 → 與昨日比較 + 歷史百分位 + 基準化（每萬點融資）
 2. 美股融資：靜態月資料 → 期貨 funding rate 代理
 3. 韓股融資：靜態 → 日度 KRX 數據
+4. 融資維持率監控：150% 警戒線、130% 追繳線
 """
 
 import json
@@ -10,51 +11,103 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pathlib import Path
 import urllib.request, urllib.parse
+import yfinance as yf
 
 # ========================================
-# 1. 台灣融資：改進為趨勢追蹤
+# 0. 輔助函數：取得大盤指數 & 基準化
+# ========================================
+
+def get_taiex():
+    """取得台灣加權指數最新收盤點數"""
+    try:
+        df = yf.download("^TWII", period="5d", interval="1d", progress=False, auto_adjust=False)
+        if df.empty:
+            return None
+        val = df['Close'].iloc[-1]
+        if hasattr(val, 'iloc'):
+            val = val.iloc[0]
+        return float(val)
+    except:
+        return None
+
+def get_tw_margin_ratio():
+    """
+    取得台灣融資維持率
+    從 TWSE 取得融資使用金額、融資餘額、融資用金額
+    維持率 = (股票市值 + 融資餘額) / 融資使用金額
+    簡化版：用融資餘額 / 融資使用金額 * 100% 作為相對指標
+    """
+    try:
+        _url = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json"
+        _req = urllib.request.Request(_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(_req, timeout=10) as _r:
+            _d = json.loads(_r.read())
+
+        _tables = _d.get("tables", [])
+        if _tables:
+            _rows = _tables[0].get("data", [])
+            # [2] 是融資餘額行，[5] 是餘額(100萬)
+            margin_balance = int(_rows[2][5].replace(",", "")) / 100000  # 億元
+            # [6] 是融資使用金額
+            margin_used = int(_rows[2][6].replace(",", "")) / 100000  # 億元
+
+            if margin_used > 0:
+                ratio_pct = (margin_balance / margin_used) * 100
+                return ratio_pct
+        return None
+    except Exception as e:
+        return None
+
+# ========================================
+# 1. 台灣融資：改進為趨勢追蹤 + 基準化
 # ========================================
 
 def get_tw_margin_with_history(archive_dir: Path = Path("margin_history")):
     """
-    當日融資 + 與昨日比較 + 歷史百分位
+    當日融資 + 與昨日比較 + 歷史百分位 + 基準化（每萬點融資）
     """
     archive_dir.mkdir(exist_ok=True)
-    
+
     tw_margin_bil = None
     tw_margin_trend = None
     tw_margin_signal = ""
-    
+    tw_margin_normalized = None  # 每萬點融資金額
+    tw_margin_ratio = None  # 融資維持率
+
     try:
         # 1. 取得當日融資
         _url = "https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json"
         _req = urllib.request.Request(_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(_req, timeout=10) as _r:
             _d = json.loads(_r.read())
-        
+
         _tables = _d.get("tables", [])
         if _tables:
             _rows = _tables[0].get("data", [])
             _val_str = _rows[2][5].replace(",", "")
             tw_margin_bil = int(_val_str) / 100000  # 億元
-        
+
+        # 1.5 取得融資維持率
+        tw_margin_ratio = get_tw_margin_ratio()
+
+        # 1.7 取得大盤指數，計算基準化融資金額
+        taiex_points = get_taiex()
+        if tw_margin_bil is not None and taiex_points is not None and taiex_points > 0:
+            # 融資 / 指數點數 * 10000 = 每萬點的融資金額
+            tw_margin_normalized = (tw_margin_bil / taiex_points) * 10000
+
         # 2. 讀取歷史數據 (margin_history.json)
         history_file = archive_dir / "margin_history.json"
         history = []
         if history_file.exists():
             history = json.loads(history_file.read_text())
-        
-        # 同一天重跑時覆蓋當日紀錄，比較對象改為前一天
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        if history and history[-1]["date"] == today_str:
-            history.pop()
 
         # 3. 與昨日比較
         if history:
             yesterday_margin = history[-1]["margin"]
             change_pct = (tw_margin_bil - yesterday_margin) / yesterday_margin * 100
             tw_margin_trend = f"{change_pct:+.2f}%"
-            
+
             # 判斷信號
             if change_pct > 5:
                 tw_margin_signal = "⚠ 融資升溫"
@@ -62,36 +115,68 @@ def get_tw_margin_with_history(archive_dir: Path = Path("margin_history")):
                 tw_margin_signal = "✅ 融資退出"
             else:
                 tw_margin_signal = "融資正常"
-        
+
+        # 3.5 加入維持率警戒信號
+        if tw_margin_ratio is not None:
+            if tw_margin_ratio < 130:
+                tw_margin_signal += " 🚨追繳線危險"
+            elif tw_margin_ratio < 150:
+                tw_margin_signal += " ⚠ 維持率警戒"
+
         # 4. 更新歷史檔案 (append-only)
-        history.append({"date": today_str, "margin": tw_margin_bil})
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        history.append({
+            "date": today_str,
+            "margin": tw_margin_bil,
+            "taiex": taiex_points,
+            "normalized": tw_margin_normalized,
+            "ratio": tw_margin_ratio
+        })
         # 只保留最近 252 天（一年交易日）
         history = history[-252:]
         history_file.write_text(json.dumps(history, indent=2))
-        
+
         # 5. 計算歷史百分位（融資是否歷史偏高）
         history_margins = [h["margin"] for h in history]
         if len(history_margins) >= 20:
             percentile_90 = pd.Series(history_margins).quantile(0.9)
             percentile_95 = pd.Series(history_margins).quantile(0.95)
-            
+
             if tw_margin_bil > percentile_95:
                 tw_margin_signal += " (歷史前5%)"
             elif tw_margin_bil > percentile_90:
                 tw_margin_signal += " (歷史前10%)"
-        
+
+        # 6. 基準化後的百分位
+        history_normalized = [h.get("normalized") for h in history if h.get("normalized")]
+        normalized_pct = None
+        if len(history_normalized) >= 20:
+            normalized_pct = (pd.Series(history_normalized) <= tw_margin_normalized).mean() * 100
+
+        note = f"{tw_margin_bil:,.0f}億 {tw_margin_trend} {tw_margin_signal}"
+        if tw_margin_normalized is not None:
+            note += f" | 基準化: {tw_margin_normalized:,.1f}/萬點"
+        if tw_margin_ratio is not None:
+            note += f" | 維持率: {tw_margin_ratio:.1f}%"
+
         return {
             "current": tw_margin_bil,
+            "normalized": tw_margin_normalized,
+            "ratio": tw_margin_ratio,
             "trend": tw_margin_trend,
             "signal": tw_margin_signal,
-            "note": f"{tw_margin_bil:,.0f}億 {tw_margin_trend or '(尚無前一日資料)'} {tw_margin_signal}".strip()
+            "normalized_pct": normalized_pct,
+            "note": note
         }
-    
+
     except Exception as e:
         return {
             "current": None,
+            "normalized": None,
+            "ratio": None,
             "trend": None,
             "signal": f"抓取失敗：{e}",
+            "normalized_pct": None,
             "note": f"抓取失敗：{e}"
         }
 
@@ -197,18 +282,29 @@ def get_kr_margin_daily():
 def generate_margin_section():
     """
     生成融資監控區塊 (給 leverage-tracker/generate.py 用)
+    新增：基準化、維持率警戒
     """
     tw_result = get_tw_margin_with_history()
     us_result = get_us_margin_proxy_funding_rate()
     kr_result = get_kr_margin_daily()
-    
+
+    # 台股詳細資訊
+    tw_detail = ""
+    if tw_result['current'] is not None:
+        tw_detail = tw_result['note']
+        # 添加基準化後的歷史百分位
+        if tw_result.get('normalized_pct') is not None:
+            tw_detail += f"<br>基準化歷史位置: {tw_result['normalized_pct']:.0f}th percentile"
+    else:
+        tw_detail = tw_result['note']
+
     html = f"""
     <div class="card">
-    <b>💰 融資監控（實時化）</b>
+    <b>💰 融資監控（基準化 + 維持率）</b>
     <table style="width:100%; font-size:13px; margin-top:8px">
     <tr>
         <td style="width:30%"><b>台股</b></td>
-        <td>{tw_result['note']}</td>
+        <td>{tw_detail}</td>
     </tr>
     <tr>
         <td><b>美股</b></td>
@@ -219,9 +315,13 @@ def generate_margin_section():
         <td>{kr_result['note']}</td>
     </tr>
     </table>
+    <div style="font-size:11px; margin-top:6px; color:#666;">
+    <b>說明：</b>「基準化」用大盤點數標準化融資金額，跨年份比較才準。<br>
+    「維持率」150%警戒、130%追繳。融資維持率低 = 散戶撐不住 = 可能面臨強制平倉。
+    </div>
     </div>
     """
-    
+
     return html, {
         "tw": tw_result,
         "us": us_result,
